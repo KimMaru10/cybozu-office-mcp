@@ -1,225 +1,87 @@
 # cybozu-office-mcp
 
-**サイボウズ Office 10（パッケージ版）** の予定を Claude から確認・登録できるようにする、**非公式**の MCP サーバーです。
+**サイボウズ Office 10（パッケージ版）** の連携API（SOAP）で予定を読み書きする、**非公式**の MCP サーバーです。
 
 > [!IMPORTANT]
-> - 個人が作った非公式ツールです。サイボウズ株式会社とは関係がなく、同社のサポートも受けられません。
-> - 使っているのは Office の「連携API」です。サイボウズは2018年にこのAPIの資料配布を終えており、サポート対象外のAPIです。会社で使う場合は、事前にシステム管理者へ確認してください。
-> - **クラウド版（cybozu.com）では使えません**（クラウド版ではお客様によるAPI利用が認められていません）。
+> - 非公式ツールです。サイボウズ株式会社とは無関係で、連携APIは同社のサポート対象外です（2018年に資料配布終了）。業務で使う場合は管理者に確認してください。
+> - **クラウド版（cybozu.com）では使えません。**
 
-## できること
+## ツール
 
 | ツール | 内容 |
 |---|---|
-| `cybozu_get_my_schedule` | 自分の予定を表示（既定は今日から7日分） |
-| `cybozu_get_schedule` | 他のメンバー・組織・設備（会議室）の予定を表示。名前の一部で指定できます |
-| `cybozu_find_free_time` | 複数人の空き時間を探す。会議室も条件に入れられます |
-| `cybozu_find_free_rooms` | 指定した時間帯に空いている会議室の一覧 |
-| `cybozu_search_users` | 名前・ログイン名・部署名でユーザーを検索 |
-| `cybozu_list_organizations` / `cybozu_list_facilities` / `cybozu_list_plan_menu` | 部署・設備・予定メニューの一覧 |
-| `cybozu_create_event` | 予定の登録（参加者・会議室・予定メニュー・メモ・非公開・繰り返し・終日・期間予定） |
-| `cybozu_update_event` | 予定の変更（繰り返し予定は「この回だけ／この回以降／すべて」） |
-| `cybozu_delete_event` | 予定の削除（繰り返し予定は「この回だけ／この回以降／すべて」） |
+| `cybozu_get_my_schedule` / `cybozu_get_schedule` | 自分／他メンバー・組織・設備の予定 |
+| `cybozu_find_free_time` / `cybozu_find_free_rooms` | 複数人の空き時間／空き会議室 |
+| `cybozu_search_users` / `cybozu_list_organizations` / `cybozu_list_facilities` / `cybozu_list_plan_menu` | マスタ参照 |
+| `cybozu_create_event` / `cybozu_update_event` / `cybozu_delete_event` | 登録・変更・削除（参加者・会議室・メモ・非公開・繰り返し・終日・期間予定） |
 
-Claude には、たとえば次のように頼めます。
-
-- 「今週の自分の予定を出して」
-- 「山田さんと佐藤さんが来週1時間空いている時間を、会議室Aも空いている条件で探して」
-- 「10/9 15時から1時間、山田さんと定例を入れて。会議室は会議室B、予定メニューは社内Ｍ、メモに議題を書いて」
-- 「毎週金曜 10時の朝会を12月末まで繰り返しで登録して」
-- 「来週の定例だけ30分後ろにずらして」
-
-### 書き込みの安全対策
-
-- 登録・変更・削除はどれも、まず**プレビュー**（書き込みなし）を返します。あなたが内容を了承してから、Claude が `confirm=true` で実行します。
-- プレビューでは、参加者や会議室の予定との**重なり**を表示します。会議室が埋まっている場合は実行しません（サーバー側でも弾かれます）。
-- サイボウズのAPIは「他の人が先に書き換えていないか」を確かめないため、このツール側で確かめています。プレビューの時点の版（version）と実行直前の版が違えば、実行しません。
-- 削除のプレビューでは、自分以外の参加者の予定表からも消えることを警告します。
-
-### セキュリティ上の注意
-
-- **書き込みツールは「毎回確認する」設定のまま使ってください。** 予定の件名やメモには他の人が書いた文章が入っており、その中に Claude への指示のような文が紛れ込む可能性があります（プロンプトインジェクション）。Claude デスクトップの拡張機能設定で、`cybozu_create_event` / `cybozu_update_event` / `cybozu_delete_event` を「常に許可」にしないことをおすすめします。
-- パスワードは HTTPS で送ります。`http://` のURLは、パスワードが暗号化されずに流れるため既定で拒否します。
-- 予定・参加者名・メモなどの内容は Claude に送られます。社内の情報を外部サービスに出してよいかは、所属組織のルールに従ってください。
-
-### サーバーへの負荷について
-
-サイボウズ Office はファイル型のデータベースで、同時アクセスに弱いため、次のようにしています。
-
-- サイボウズへの要求は常に1件ずつ順番に送ります（同時に送りません）。
-- 「アクセスが集中しています」と返されたときは、1・2・4・8秒と間をあけて最大4回までやり直します。
-- ユーザー・組織・設備・予定メニューの一覧は1時間、予定は60秒覚えておき、同じ要求を繰り返しません（登録・変更・削除をすると予定の記憶は消します）。
-- 重なりチェックはプレビューのときだけ行い、実行時は省きます（会議室の重複予約はサーバー側でも弾かれます）。
-- `cybozu_find_free_rooms` は会議室1つにつき1回要求を送ります。会議室が多い場合は `query`（例:「東京」）で絞ってください。
-
-## 動作条件
-
-- サイボウズ Office 10 パッケージ版（10.8.4 で動作確認）
-- Claude デスクトップアプリ（macOS / Windows）、または Claude Code
-- サイボウズにブラウザでログインできるPCで使うこと（社内ネットワークやVPNの中からしか開けないサイボウズなら、そのネットワークの中で使います）
-
-## 事前に確認するもの
-
-| 項目 | 確認方法 |
-|---|---|
-| **サイボウズのURL** | ブラウザでサイボウズを開いたときのアドレスのうち、`ag.cgi` までの部分。例: `https://example.co.jp/cgi-bin/cbag/ag.cgi`（`?page=...` 以降は不要） |
-| **ログイン名** | サイボウズのログイン画面で入力しているもの。名前を一覧から選んでログインしている場合はログイン名が未設定のことがあるので、システム管理者に確認してください |
-| **パスワード** | サイボウズのパスワード |
-| **Basic認証のID／パスワード**（ある場合のみ） | ブラウザでサイボウズを開くと、サイボウズのログイン画面より前にブラウザの小さな窓でIDとパスワードを聞かれる環境があります（Webサーバーの「Basic認証」）。その場合は、そのIDとパスワードも必要です。ブラウザに保存していて普段は聞かれない場合もあります。分からなければ、システム管理者に確認してください |
+- 書き込みはプレビュー → `confirm=true` の2段階。プレビューで参加者・会議室の重なりを表示し、版（version）が変わっていれば実行しません。
+- 予定の本文にプロンプトインジェクションが紛れる可能性があるため、書き込みツールは「常に許可」にしないことを推奨します。
+- サーバー負荷対策: 要求は直列化、DBロック時は 1/2/4/8 秒で最大4回再試行、マスタは1時間・予定は60秒キャッシュ。
+- `http://` は既定で拒否（`CYBOZU_ALLOW_HTTP=1` で許可）。
 
 ## インストール
 
-### 方法A：Claude デスクトップに拡張機能として入れる（おすすめ）
+**Claude デスクトップ**: [Releases](https://github.com/KimMaru10/cybozu-office-mcp/releases) の `cybozu-office.mcpb` を開き、URL・ログイン名・パスワード（必要なら Basic 認証）を入力。
 
-1. [Releases](https://github.com/KimMaru10/cybozu-office-mcp/releases) から `cybozu-office.mcpb` をダウンロードします。
-2. ファイルをダブルクリックします（または Claude デスクトップの「設定 → 拡張機能」にドラッグします）。
-3. 「サイボウズのURL」「ログイン名」「パスワード」を入力して有効にします。Basic認証がある環境では「Basic認証のID／パスワード」も入力します。
-   - パスワードは Claude がOSの安全な保存領域（macOS ならキーチェーン）に保存します。
-4. 新しい会話で「サイボウズで今週の予定を見せて」と頼んで、動くか確かめます。
-
-Node.js のインストールは不要です（Claude デスクトップが内蔵しているものを使います）。
-
-### 方法B：ソースから組み立てて手動で設定する
-
-Node.js 18 以上が必要です。
+**ソースから**（Node.js 18+）:
 
 ```bash
-git clone https://github.com/KimMaru10/cybozu-office-mcp.git
-cd cybozu-office-mcp
-npm ci
-npm run build          # dist/index.js ができます
-```
+git clone https://github.com/KimMaru10/cybozu-office-mcp.git && cd cybozu-office-mcp
+npm ci && npm run build
+security add-generic-password -s cybozu-mcp -a '<login>' -w   # macOS: パスワードをキーチェーンへ
+CYBOZU_URL='https://example.co.jp/cgi-bin/cbag/ag.cgi' CYBOZU_USERNAME='<login>' node dist/check.js   # 接続確認
 
-**パスワードの保存（macOS）**。キーチェーンに保存しておけば、設定ファイルにパスワードを書かずに済みます。
-
-```bash
-security add-generic-password -s cybozu-mcp -a 'あなたのログイン名' -w
-# パスワードを聞かれるので入力
-```
-
-Windows の場合や、キーチェーンを使わない場合は、環境変数 `CYBOZU_PASSWORD` にパスワードを入れてください（設定ファイルに平文で残る点に注意）。
-
-**接続確認**
-
-```bash
-CYBOZU_URL='https://example.co.jp/cgi-bin/cbag/ag.cgi' \
-CYBOZU_USERNAME='あなたのログイン名' \
-node dist/check.js
-# ✔ 認証OK / ✔ ユーザー一覧 / ✔ 今日から7日間の予定 と出れば成功
-```
-
-**Claude デスクトップに登録する場合**：設定 → 開発者 → 「設定を編集」で開く `claude_desktop_config.json` に追記して、アプリを再起動します。
-
-```json
-{
-  "mcpServers": {
-    "cybozu-office": {
-      "command": "node",
-      "args": ["/絶対パス/cybozu-office-mcp/dist/index.js"],
-      "env": {
-        "CYBOZU_URL": "https://example.co.jp/cgi-bin/cbag/ag.cgi",
-        "CYBOZU_USERNAME": "あなたのログイン名"
-      }
-    }
-  }
-}
-```
-
-`node` が見つからないと言われる場合は、`which node` で出る絶対パスを `command` に書いてください。
-
-**Claude Code に登録する場合**
-
-```bash
 claude mcp add cybozu-office \
   -e CYBOZU_URL='https://example.co.jp/cgi-bin/cbag/ag.cgi' \
-  -e CYBOZU_USERNAME='あなたのログイン名' \
-  -- node /絶対パス/cybozu-office-mcp/dist/index.js
+  -e CYBOZU_USERNAME='<login>' \
+  -- node /path/to/cybozu-office-mcp/dist/index.js
 ```
-
-### 設定項目
 
 | 環境変数 | 必須 | 内容 |
 |---|---|---|
 | `CYBOZU_URL` | ○ | `ag.cgi` までのURL |
 | `CYBOZU_USERNAME` | ○ | ログイン名 |
-| `CYBOZU_PASSWORD` | △ | パスワード。未設定なら macOS キーチェーン（サービス名 `cybozu-mcp`、アカウント名＝ログイン名）から読みます |
-| `CYBOZU_BASIC_USER` | | Webサーバーの Basic 認証のID（必要な環境のみ） |
-| `CYBOZU_ALLOW_HTTP` | | `1` にすると `http://` のURLを許可（非推奨） |
-| `CYBOZU_BASIC_PASSWORD` | | Basic 認証のパスワード。未設定なら macOS キーチェーン（サービス名 `cybozu-mcp-basic`、アカウント名＝Basic認証のID）から読みます |
-
-## うまく動かないとき
-
-| 表示されるエラー | 原因と対処 |
-|---|---|
-| Webサーバーの認証（Basic認証）が必要です | サイボウズの手前に Basic 認証があります。Basic認証のIDとパスワードを設定してください |
-| ログインに失敗しました | ログイン名かパスワードが違います。ログイン名はメールアドレスではなく、別の文字列のこともあります |
-| サイボウズに接続できません | URLの誤りか、社内ネットワーク／VPNの外から使っている可能性があります |
-| 予期しない応答です | URL が `ag.cgi` を指しているか確認してください |
-| データベースにアクセスが集中しています | サイボウズ側の一時的なロックです。自動で数回（最大15秒ほど）やり直し、それでも駄目ならこのエラーになります。少し待ってから再度頼んでください |
+| `CYBOZU_PASSWORD` | △ | 未設定なら macOS キーチェーン（サービス `cybozu-mcp`、アカウント＝ログイン名）。Windows では必須 |
+| `CYBOZU_BASIC_USER` | | Basic 認証のID |
+| `CYBOZU_BASIC_PASSWORD` | | 未設定なら macOS キーチェーン（サービス `cybozu-mcp-basic`、アカウント＝Basic認証のID） |
+| `CYBOZU_ALLOW_HTTP` | | `1` で `http://` を許可 |
 
 ## 制限事項
 
-- 時刻は5分単位です（サイボウズの仕様）。日時はすべて日本時間で扱います。
-- 繰り返し予定について
-  - 「毎日（土日を除く）」の予定が、祝日にも表示されるかは確認できていません。
-  - 「この回だけ」の変更は、その日のうちでの時刻変更に限ります。別の日に移す場合は、その回を削除して新しく登録してください。
-  - 毎月第5週の指定はできません（「最終週」を使ってください）。
-  - 日をまたぐ予定は繰り返しにできません。
-- 参加者に部署（組織）を丸ごと入れる操作には対応していません（個人の指定のみ）。すでに組織が入っている予定を変更しても、組織はそのまま残ります。
-- 日時は日本時間（UTC+9）固定です。サイボウズのタイムゾーン設定が日本以外のユーザーの予定は、時刻がずれる可能性があります。
-- 予定への「フォロー（コメント）」がある予定を変更したときに、フォローが残るかは確認できていません。
-- 予定の通知メールが飛ぶかは、サイボウズ側の設定によります。
-- サイボウズの資料が公開されていないため、ここに書いていない機能（ファシリテーター、出欠確認、予定へのコメントなど）は扱えません。
-- パッケージ版サイボウズ Office のサポートは2027年に終わります。クラウド版などに移行した後は使えません。
+- 時刻は5分単位、日本時間（UTC+9）固定（タイムゾーン設定が日本以外のユーザーは時刻がずれる可能性あり）。
+- 繰り返し: 「この回だけ」の変更は同日内の時刻変更のみ／第5週指定不可（「最終週」を使用）／日またぎ不可／「毎日（土日除く）」の祝日の扱いは未確認。
+- 参加者への組織の指定は非対応（既存の組織参加者は変更時も維持）。
+- フォロー付き予定の変更でフォローが残るかは未確認。ファシリテーター・出欠確認・コメントは非対応。通知メールはサイボウズ側の設定次第。
+- `cybozu_find_free_rooms` は会議室ごとに1要求。多い場合は `query` で絞ってください。
+- パッケージ版 Office のサポートは2027年に終了します。
 
-## 動作確認の状況
+## 動作確認
 
-| 項目 | 実サーバー（Office 10.8.4） | 模擬サーバーでのテスト |
+| 項目 | 実サーバー（Office 10.8.4） | 模擬サーバー |
 |---|---|---|
 | 予定・ユーザー・組織・設備・予定メニューの取得 | ✔ | ✔ |
 | 通常・終日・期間予定の登録／変更／削除 | ✔ | ✔ |
 | 繰り返し予定の登録、「この回だけ」「この回以降」「すべて」の変更・削除 | ✔ | ✔ |
 | 会議室つきの登録、会議室の重複予約が弾かれること | ✔ | ✔ |
 | 他のメンバーと会議室を入れた登録 | ✔ | ✔ |
-| ログイン名＋パスワードでの認証 | インストール後に `check.js` で確認してください | ✔ |
+| ログイン名＋パスワードでの認証 | `check.js` で確認してください | ✔ |
 
-実サーバーでの確認は、ブラウザのログイン状態を使ってAPIを呼ぶ方法で行いました。書き込みの確認には、自分だけが参加する非公開のテスト予定（作成・変更・削除）と、同僚の了承を得た実際の打ち合わせ1件を使いました。
+実サーバーはブラウザのログイン状態でAPIを呼んで確認（書き込みは自分だけの非公開テスト予定と、同僚の了承を得た実際の打ち合わせ1件）。
 
 ## 開発
 
 ```bash
 npm ci
-npm run typecheck      # 型チェック
-npm test               # ビルド＋模擬サーバーでの結合テスト（読み取り・書き込み）
-npm run pack           # 拡張機能ファイル cybozu-office.mcpb を作る
+npm run typecheck
+npm test        # ビルド＋模擬サーバー（test/）での結合テスト
+npm run pack    # cybozu-office.mcpb を生成
 ```
 
-| ファイル | 役割 |
-|---|---|
-| `src/soap.ts` | SOAP の依頼文の組み立て・送信・応答の解析・エラー処理 |
-| `src/schedule.ts` | 予定の取得、繰り返し予定の展開、書き込み用の XML 作成 |
-| `src/directory.ts` | ユーザー・組織・設備・予定メニュー（1時間キャッシュ） |
-| `src/freetime.ts` | 空き時間の計算 |
-| `src/writeTools.ts` | 登録・変更・削除・空き会議室のツール |
-| `src/index.ts` | MCP サーバー本体（読み取りツール） |
-| `src/config.ts` | 設定とパスワード（キーチェーン）の読み込み |
-| `test/` | 実サーバーの応答の形を模した模擬サーバーと結合テスト |
-| `bundle/manifest.json` | Claude デスクトップ拡張機能（MCPB）の定義 |
+リリース: `package.json` と `bundle/manifest.json` の `version` を上げ、`npm test && npm run pack` して Releases に `.mcpb` を添付。
 
-### リリース手順
+## 謝辞・商標・ライセンス
 
-1. `package.json` と `bundle/manifest.json` の `version` を上げる
-2. `npm test && npm run pack`
-3. GitHub の Releases で新しいリリースを作り、`cybozu-office.mcpb` を添付する
-
-## 謝辞
-
-APIの呼び出し方は [hatashinya/cybozu-connect](https://github.com/hatashinya/cybozu-connect) を参考にしました。コードは独自に書いたもので、同ライブラリのコードは含んでいません。
-
-## 商標
-
-「サイボウズ」「サイボウズ Office」はサイボウズ株式会社の登録商標です。本ソフトウェアは同社とは関係のない非公式のものです。
-
-## ライセンス
-
-[MIT](./LICENSE)。配布物に同梱している依存パッケージのライセンスは [THIRD_PARTY_LICENSES.txt](./THIRD_PARTY_LICENSES.txt) にまとめています（`npm run licenses` で再生成）。
+- API の呼び出し方は [hatashinya/cybozu-connect](https://github.com/hatashinya/cybozu-connect) を参考にしました（コードは含みません）。
+- 「サイボウズ」「サイボウズ Office」はサイボウズ株式会社の登録商標です。
+- [MIT](./LICENSE)。同梱依存のライセンスは [THIRD_PARTY_LICENSES.txt](./THIRD_PARTY_LICENSES.txt)。
