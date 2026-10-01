@@ -1,0 +1,25 @@
+// サーバーのDBロック（アクセス集中）と同時アクセスのテスト
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { start, stats, store } from "./mock-server.mjs";
+const opts = { busy: 0, delayMs: 30 };
+const srv = await start(18083, opts);
+const t = new StdioClientTransport({ command: "node", args: ["dist/index.js"], env: { ...process.env, CYBOZU_URL: "http://127.0.0.1:18083/cgi-bin/cybozu/ag.cgi", CYBOZU_USERNAME: "me@example.jp", CYBOZU_PASSWORD: "p&ss<word>" }, stderr: "pipe" });
+const c = new Client({ name: "t", version: "1" }); await c.connect(t);
+let fails = 0;
+const check = (cond, msg) => { console.log(`  ${cond ? "✔" : "✖ FAIL:"} ${msg}`); if (!cond) fails++; };
+let r = await c.callTool({ name: "cybozu_find_free_time", arguments: { users: ["山田", "佐藤花子"], facilities: ["会議室A"], start_date: "2026-10-02", end_date: "2026-10-03" } });
+check(!r.isError && stats.maxInflight === 1, `同時に送る要求は常に1件（最大 ${stats.maxInflight} 件）`);
+opts.busy = 2; const before = stats.busyReturned;
+r = await c.callTool({ name: "cybozu_get_my_schedule", arguments: { start_date: "2026-10-02", end_date: "2026-10-02" } });
+check(!r.isError && stats.busyReturned - before === 2, "アクセス集中が2回続いても、待って再試行して成功");
+opts.busy = 2;
+r = await c.callTool({ name: "cybozu_create_event", arguments: { title: "再試行テスト", start: "2026-10-05 10:00", confirm: true } });
+check(!r.isError && store.size === 1, "書き込みでもアクセス集中のあと再試行して1件だけ登録");
+opts.busy = 99;
+const t0 = Date.now();
+r = await c.callTool({ name: "cybozu_get_my_schedule", arguments: { start_date: "2026-10-02", end_date: "2026-10-02" } });
+check(r.isError && r.content[0].text.includes("アクセスが集中"), `集中が続けば諦めてエラーを返す（${Math.round((Date.now() - t0) / 1000)}秒）`);
+opts.busy = 0;
+await c.close(); srv.close();
+console.log(fails ? `✖ ${fails} 件失敗` : "✔ すべて成功"); process.exit(fails ? 1 : 0);

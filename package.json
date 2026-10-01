@@ -1,0 +1,40 @@
+{
+  "name": "cybozu-office-mcp",
+  "version": "0.2.4",
+  "description": "サイボウズ Office 10（パッケージ版）の予定を Claude から読み書きする非公式 MCP サーバー",
+  "scripts": {
+    "typecheck": "tsc",
+    "build": "esbuild src/index.ts src/check.ts --bundle --platform=node --target=node18 --format=esm --outdir=dist --banner:js=\"import{createRequire}from'module';const require=createRequire(import.meta.url);\"",
+    "check": "node dist/check.js",
+    "test": "npm run build && node test/e2e.mjs && node test/e2e-write.mjs && node test/e2e-basic.mjs && node test/e2e-busy.mjs",
+    "pack": "npm run build && npm run licenses && mkdir -p bundle/dist && cp dist/index.js bundle/dist/ && cp THIRD_PARTY_LICENSES.txt LICENSE bundle/ && mcpb pack bundle cybozu-office.mcpb",
+    "licenses": "node tools/gen-licenses.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.31.0",
+    "fast-xml-parser": "^5.11.2",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@anthropic-ai/mcpb": "^2.1.2",
+    "@types/node": "^26.6.3",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
+  },
+  "type": "module",
+  "author": "KimMaru10",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/KimMaru10/cybozu-office-mcp.git"
+  },
+  "keywords": [
+    "mcp",
+    "cybozu",
+    "claude",
+    "schedule"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}

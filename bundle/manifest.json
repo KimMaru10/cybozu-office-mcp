@@ -1,0 +1,123 @@
+{
+  "manifest_version": "0.3",
+  "name": "cybozu-office",
+  "display_name": "サイボウズ Office（非公式）",
+  "version": "0.2.4",
+  "description": "サイボウズ Office 10（パッケージ版）の予定を読み書きする非公式の拡張機能。予定の確認、空き時間・空き会議室の検索、予定の登録・変更・削除（繰り返し・参加者・会議室・メモ対応）。",
+  "author": {
+    "name": "KimMaru10",
+    "url": "https://github.com/KimMaru10"
+  },
+  "server": {
+    "type": "node",
+    "entry_point": "dist/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/dist/index.js"
+      ],
+      "env": {
+        "CYBOZU_URL": "${user_config.cybozu_url}",
+        "CYBOZU_USERNAME": "${user_config.username}",
+        "CYBOZU_PASSWORD": "${user_config.password}",
+        "CYBOZU_BASIC_USER": "${user_config.basic_user}",
+        "CYBOZU_BASIC_PASSWORD": "${user_config.basic_password}"
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "cybozu_get_my_schedule",
+      "description": "自分の予定を取得"
+    },
+    {
+      "name": "cybozu_get_schedule",
+      "description": "他のメンバー・組織・設備の予定を取得"
+    },
+    {
+      "name": "cybozu_find_free_time",
+      "description": "複数人（と会議室）の空き時間を探す"
+    },
+    {
+      "name": "cybozu_find_free_rooms",
+      "description": "空いている会議室を探す"
+    },
+    {
+      "name": "cybozu_search_users",
+      "description": "ユーザーを検索"
+    },
+    {
+      "name": "cybozu_list_organizations",
+      "description": "組織の一覧"
+    },
+    {
+      "name": "cybozu_list_facilities",
+      "description": "設備の一覧"
+    },
+    {
+      "name": "cybozu_list_plan_menu",
+      "description": "予定メニューの一覧"
+    },
+    {
+      "name": "cybozu_create_event",
+      "description": "予定を登録（プレビュー→確認）"
+    },
+    {
+      "name": "cybozu_update_event",
+      "description": "予定を変更（プレビュー→確認）"
+    },
+    {
+      "name": "cybozu_delete_event",
+      "description": "予定を削除（プレビュー→確認）"
+    }
+  ],
+  "user_config": {
+    "cybozu_url": {
+      "type": "string",
+      "title": "サイボウズのURL",
+      "description": "ブラウザでサイボウズを開いたときのURLのうち、ag.cgi までの部分（例: https://example.co.jp/cgi-bin/cbag/ag.cgi）",
+      "required": true
+    },
+    "username": {
+      "type": "string",
+      "title": "ログイン名",
+      "description": "サイボウズのログイン名（ログイン画面で入力しているもの）",
+      "required": true
+    },
+    "password": {
+      "type": "string",
+      "title": "パスワード",
+      "description": "サイボウズのパスワード（Claudeが安全な領域に保存します）",
+      "sensitive": true,
+      "required": true
+    },
+    "basic_user": {
+      "type": "string",
+      "title": "Basic認証のID（必要な場合のみ）",
+      "description": "ブラウザでサイボウズを開くと、サイボウズのログイン画面より前にIDとパスワードを聞かれる場合に入力します。聞かれない場合は空欄。",
+      "required": false
+    },
+    "basic_password": {
+      "type": "string",
+      "title": "Basic認証のパスワード（必要な場合のみ）",
+      "description": "上のIDに対応するパスワード。",
+      "sensitive": true,
+      "required": false
+    }
+  },
+  "compatibility": {
+    "platforms": [
+      "darwin",
+      "win32"
+    ],
+    "runtimes": {
+      "node": ">=18.0.0"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/KimMaru10/cybozu-office-mcp"
+  },
+  "homepage": "https://github.com/KimMaru10/cybozu-office-mcp",
+  "license": "MIT"
+}

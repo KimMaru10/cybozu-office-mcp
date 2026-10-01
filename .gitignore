@@ -1,0 +1,8 @@
+node_modules/
+dist/
+bundle/dist/
+bundle/LICENSE
+bundle/THIRD_PARTY_LICENSES.txt
+*.mcpb
+.DS_Store
+HANDOFF.md
